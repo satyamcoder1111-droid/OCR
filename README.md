@@ -1,6 +1,6 @@
 # Cheque And Online Transfer OCR API
 
-Python Flask API that uses LangChain and Groq Vision to extract structured JSON from uploaded cheque or online-transfer images.
+Python Flask API that uses LangChain and Groq Vision to extract structured JSON from uploaded cheque, POS, or online-transfer images.
 
 Successful OCR responses always use the same top-level structure:
 
@@ -9,7 +9,8 @@ Successful OCR responses always use the same top-level structure:
   "status": false,
   "data": {
     "online_transfer": {},
-    "cheque": {}
+    "cheque": {},
+    "pos": {}
   }
 }
 ```
@@ -95,6 +96,20 @@ Form field:
 file
 ```
 
+Optional form field:
+
+```text
+collection_by
+```
+
+Values:
+
+```text
+1 = cheque
+2 = pos
+3 = online_transfer
+```
+
 Allowed file types:
 
 ```text
@@ -121,7 +136,8 @@ Successful cheque response:
       "branch": "KHALIDIYA, ABU DHABI",
       "from_ocr": true,
       "extraction_method": "llm"
-    }
+    },
+    "pos": {}
   }
 }
 ```
@@ -144,7 +160,38 @@ Successful online-transfer response:
       "from_ocr": true,
       "extraction_method": "llm"
     },
-    "cheque": {}
+    "cheque": {},
+    "pos": {}
+  }
+}
+```
+
+Successful POS response:
+
+```json
+{
+  "status": true,
+  "data": {
+    "online_transfer": {},
+    "cheque": {},
+    "pos": {
+      "merchant_name": "GOODSERVICE SUPPLIE",
+      "merchant_id": "200601919038",
+      "terminal_id": "13268178",
+      "batch_no": "5446",
+      "receipt_no": "000115",
+      "date": "26-05-2026",
+      "time": "14:51",
+      "amount": "524.25",
+      "currency": "AED",
+      "card_last4": "1010",
+      "card_scheme": "MASTERCARD",
+      "approval_code": "688345",
+      "transaction_status": "Approved",
+      "payment_method": "MASTER",
+      "from_ocr": true,
+      "extraction_method": "llm"
+    }
   }
 }
 ```
@@ -153,14 +200,16 @@ Successful online-transfer response:
 
 ```bash
 curl -X POST http://localhost:5000/extract ^
-  -F "file=@C:\path\to\document.jpg"
+  -F "file=@C:\path\to\document.jpg" ^
+  -F "collection_by=2"
 ```
 
 On macOS or Linux:
 
 ```bash
 curl -X POST http://localhost:5000/extract \
-  -F "file=@/path/to/document.jpg"
+  -F "file=@/path/to/document.jpg" \
+  -F "collection_by=2"
 ```
 
 ## Postman Instructions
@@ -172,13 +221,14 @@ curl -X POST http://localhost:5000/extract \
 5. Add a key named `file`.
 6. Change the key type from `Text` to `File`.
 7. Choose a `.jpg`, `.jpeg`, `.png`, or `.webp` document image.
-8. Click `Send`.
+8. Add a key named `collection_by` with value `1`, `2`, or `3`.
+9. Click `Send`.
 
 ## Notes
 
 - Successful OCR responses always contain top-level `status` and `data` keys.
-- `data` always contains `online_transfer` and `cheque` keys.
-- `status` is `true` when data is extracted and `false` when both extraction objects are empty.
+- `data` always contains `online_transfer`, `cheque`, and `pos` keys.
+- `status` is `true` when data is extracted and `false` when all extraction objects are empty.
 - The matching object is filled based on the uploaded image, and the unused object is `{}`.
 - If the model returns invalid JSON, the API responds with an error and includes the raw model response for debugging.
 - The API supports one primary Groq key plus five optional fallback keys.
