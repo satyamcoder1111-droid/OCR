@@ -6,6 +6,7 @@ Successful OCR responses always use the same top-level structure:
 
 ```json
 {
+  "status": false,
   "online_transfer": {},
   "cheque": {}
 }
@@ -102,6 +103,7 @@ Successful cheque response:
 
 ```json
 {
+  "status": true,
   "online_transfer": {},
   "cheque": {
     "date": "13-11-2025",
@@ -124,6 +126,7 @@ Successful online-transfer response:
 
 ```json
 {
+  "status": true,
   "online_transfer": {
     "date": "20/10/2025",
     "receipt_no": "LN57238259639058",
@@ -167,7 +170,8 @@ curl -X POST http://localhost:5000/extract \
 
 ## Notes
 
-- Successful OCR responses always contain `online_transfer` and `cheque` top-level keys.
+- Successful OCR responses always contain `status`, `online_transfer`, and `cheque` top-level keys.
+- `status` is `true` when data is extracted and `false` when both extraction objects are empty.
 - The matching object is filled based on the uploaded image, and the unused object is `{}`.
 - If the model returns invalid JSON, the API responds with an error and includes the raw model response for debugging.
 - The API supports one primary Groq key plus five optional fallback keys.
