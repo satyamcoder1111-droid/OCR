@@ -28,14 +28,14 @@ SYSTEM_PROMPT = """You are an accurate OCR and document extraction system for ch
 
 Return ONLY valid JSON. No markdown and no explanation.
 The response must always use exactly this top-level structure:
-{"status":false,"online_transfer":{},"cheque":{}}
+{"status":false,"data":{"online_transfer":{},"cheque":{}}}
 
 Your first priority is to read visible text from the image and extract fields. Do not return empty objects when any readable cheque or transfer details are visible.
 
 If the image contains cheque/check words, cheque number, payee, payer, amount in words, account number, IBAN, branch, bank name, MICR-like numbers, or a pay-to line, treat it as a cheque. Fill cheque and keep online_transfer as {}.
 If the image contains receipt number, transaction number, reference number, beneficiary, sender/from account, transfer status, IBAN, bank code, or online/mobile banking transfer details, treat it as an online transfer. Fill online_transfer and keep cheque as {}.
 If both are possible, choose the one with stronger evidence.
-Only return {"status":false,"online_transfer":{},"cheque":{}} when the image has no readable financial text at all.
+Only return {"status":false,"data":{"online_transfer":{},"cheque":{}}} when the image has no readable financial text at all.
 
 Use snake_case keys inside the matching object only. Never guess or invent fields.
 Normalize dates to DD-MM-YYYY for cheques and DD/MM/YYYY for online transfers when confident; otherwise keep original date text.
@@ -46,7 +46,7 @@ If text is unclear, return the best readable value with confidence. Omit invisib
 USER_EXTRACTION_PROMPT = """Look carefully at this image and extract the cheque or online-transfer details.
 
 Return only this top-level JSON shape:
-{"status":false,"online_transfer":{},"cheque":{}}
+{"status":false,"data":{"online_transfer":{},"cheque":{}}}
 
 Fill exactly one object when any readable details are visible and set status to true. Do not answer with both objects empty unless the image has no readable financial text."""
 
@@ -56,7 +56,7 @@ Re-read the image carefully. It is expected to be either a cheque or an online t
 Extract any visible financial fields you can read, even if some text is unclear.
 
 Return only this top-level JSON shape:
-{"status":false,"online_transfer":{},"cheque":{}}
+{"status":false,"data":{"online_transfer":{},"cheque":{}}}
 
 Fill cheque if you see cheque/check, payee, payer, amount in words, account number, IBAN, bank, branch, or cheque number.
 Fill online_transfer if you see receipt, transaction, reference, beneficiary, sender/from account, IBAN, amount, or transfer status.
@@ -275,6 +275,10 @@ def normalize_extraction_response(data: dict[str, Any] | list[Any]) -> dict[str,
     if not isinstance(data, dict):
         return normalized
 
+    extraction_data = data.get("data")
+    if isinstance(extraction_data, dict):
+        data = extraction_data
+
     online_transfer = data.get("online_transfer")
     cheque = data.get("cheque")
     remaining_data = {
@@ -307,7 +311,7 @@ def is_empty_extraction(data: dict[str, Any]) -> bool:
 
 def success_response(data: dict[str, Any] | list[Any]):
     if isinstance(data, dict) and "online_transfer" in data and "cheque" in data:
-        return jsonify({"status": not is_empty_extraction(data), **data}), 200
+        return jsonify({"status": not is_empty_extraction(data), "data": data}), 200
 
     return jsonify(data), 200
 
