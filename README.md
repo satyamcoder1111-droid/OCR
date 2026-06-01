@@ -233,4 +233,5 @@ curl -X POST http://localhost:5000/extract \
 - If the model returns invalid JSON, the API responds with an error and includes the raw model response for debugging.
 - The API supports one primary Groq key plus five optional fallback keys.
 - Uploaded images are resized and compressed before being sent to Groq to reduce latency.
+- The default image settings are optimized for speed. You can override `MAX_IMAGE_DIMENSION`, `JPEG_QUALITY`, and `MAX_OUTPUT_TOKENS` with environment variables.
 - The app uses the Groq model `meta-llama/llama-4-scout-17b-16e-instruct`.

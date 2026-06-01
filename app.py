@@ -26,8 +26,9 @@ COLLECTION_TYPES = {
     "3": "online_transfer",
 }
 MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
-MAX_IMAGE_DIMENSION = 2400
-JPEG_QUALITY = 92
+MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "900"))
+MAX_IMAGE_DIMENSION = int(os.getenv("MAX_IMAGE_DIMENSION", "1800"))
+JPEG_QUALITY = int(os.getenv("JPEG_QUALITY", "86"))
 
 SYSTEM_PROMPT = """You are an accurate OCR and document extraction system for payment proof images, including cheques, online-transfer receipts, and POS/card purchase receipts.
 
@@ -56,6 +57,30 @@ Return only one JSON object with this top-level JSON shape:
 
 Fill exactly one object when any readable payment details are visible and set status to true.
 Put POS/card purchase receipt data inside pos. Do not answer with all extraction objects empty unless the image has no readable financial text."""
+
+COLLECTION_PROMPTS = {
+    "cheque": """Extract this image as a cheque only.
+
+Return exactly one JSON object:
+{"status":false,"data":{"online_transfer":{},"cheque":{},"pos":{}}}
+
+Fill data.cheque with visible fields such as date, cheque_no, payee, payer, amount, amount_in_words, bank_name, account_no, iban, branch, from_ocr, and extraction_method.
+Keep data.online_transfer and data.pos as {}.""",
+    "pos": """Extract this image as a POS/card payment receipt only.
+
+Return exactly one JSON object:
+{"status":false,"data":{"online_transfer":{},"cheque":{},"pos":{}}}
+
+Fill data.pos with visible fields such as merchant_name, merchant_id, terminal_id, batch_no, receipt_no, date, time, transaction_type, amount, currency, card_last4, card_scheme, approval_code, transaction_status, payment_method, from_ocr, and extraction_method.
+Keep data.online_transfer and data.cheque as {}.""",
+    "online_transfer": """Extract this image as an online transfer receipt only.
+
+Return exactly one JSON object:
+{"status":false,"data":{"online_transfer":{},"cheque":{},"pos":{}}}
+
+Fill data.online_transfer with visible fields such as date, receipt_no, transaction_no, reference_no, from_account, amount, beneficiary_name, beneficiary_iban, bank_name, account_type, transaction_status, from_ocr, and extraction_method.
+Keep data.cheque and data.pos as {}.""",
+}
 
 EMPTY_RETRY_PROMPT = """The previous extraction returned empty objects.
 
@@ -103,7 +128,7 @@ def get_llm(api_key: str) -> ChatGroq:
         llm_clients[api_key] = ChatGroq(
             model=MODEL_NAME,
             temperature=0,
-            max_tokens=2000,
+            max_tokens=MAX_OUTPUT_TOKENS,
             api_key=api_key,
         )
 
@@ -518,7 +543,7 @@ def extract_document():
 
         base64_image = encode_image_to_base64(optimized_image_bytes)
 
-        extraction_prompt = build_collection_prompt(collection_type, USER_EXTRACTION_PROMPT)
+        extraction_prompt = COLLECTION_PROMPTS.get(collection_type) if collection_type else USER_EXTRACTION_PROMPT
         messages = build_vision_messages(extraction_prompt, base64_image, mime_type)
         response = invoke_groq_with_fallbacks(messages)
         raw_response = response.content if isinstance(response.content, str) else json.dumps(response.content)
