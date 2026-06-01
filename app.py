@@ -241,6 +241,34 @@ def error_response(message: str, status_code: int, **extra: Any):
     return jsonify(payload), status_code
 
 
+@app.route("/", methods=["GET"])
+def index():
+    return jsonify(
+        {
+            "success": True,
+            "status": "running",
+            "message": "OCR API is running. Upload images with POST /extract using multipart/form-data field 'file'.",
+            "endpoints": {
+                "extract": {
+                    "method": "POST",
+                    "path": "/extract",
+                    "form_field": "file",
+                    "allowed_types": sorted(ALLOWED_EXTENSIONS),
+                },
+                "health": {
+                    "method": "GET",
+                    "path": "/health",
+                },
+            },
+        }
+    ), 200
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"success": True, "status": "healthy"}), 200
+
+
 @app.route("/extract", methods=["POST"])
 def extract_document():
     if "file" not in request.files:
