@@ -1,8 +1,15 @@
-# Dynamic Document OCR API
+# Cheque And Online Transfer OCR API
 
-Python Flask API that uses LangChain and Groq Vision to extract dynamic structured JSON from uploaded financial or business document images.
+Python Flask API that uses LangChain and Groq Vision to extract structured JSON from uploaded cheque or online-transfer images.
 
-The API does not use a fixed schema. It asks the vision model to create fields based only on visible document content.
+Successful OCR responses always use the same top-level structure:
+
+```json
+{
+  "online_transfer": {},
+  "cheque": {}
+}
+```
 
 ## Requirements
 
@@ -91,16 +98,45 @@ Allowed file types:
 jpg, jpeg, png, webp
 ```
 
-Successful response:
+Successful cheque response:
 
 ```json
 {
-  "success": true,
-  "data": {
-    "document_type": "invoice",
-    "raw_text": "Readable text from the image",
-    "extracted_fields": {}
+  "online_transfer": {},
+  "cheque": {
+    "date": "13-11-2025",
+    "cheque_no": "010116",
+    "payee": "RJS FOOD SERVICE SUPPLIES LLC",
+    "payer": "ZABEEL FOODSTUFF TRADING LLC",
+    "amount": 1706.25,
+    "amount_in_words": "One Thousand Seven Hundred And Six And Fils Twenty Five Only",
+    "bank_name": "RAKBANK",
+    "account_no": "0542270043001",
+    "iban": "AE360400000542270043001",
+    "branch": "KHALIDIYA, ABU DHABI",
+    "from_ocr": true,
+    "extraction_method": "llm"
   }
+}
+```
+
+Successful online-transfer response:
+
+```json
+{
+  "online_transfer": {
+    "date": "20/10/2025",
+    "receipt_no": "LN57238259639058",
+    "from_account": "",
+    "amount": 1706.35,
+    "beneficiary_name": "RUS FOODSERVICE SUPPLIES LLC",
+    "beneficiary_iban": "AE320330000019100215065",
+    "bank_name": "WIOBAEADXXX",
+    "account_type": "",
+    "from_ocr": true,
+    "extraction_method": "llm"
+  },
+  "cheque": {}
 }
 ```
 
@@ -131,7 +167,8 @@ curl -X POST http://localhost:5000/extract \
 
 ## Notes
 
-- The returned JSON structure is dynamic and depends on the uploaded document.
+- Successful OCR responses always contain `online_transfer` and `cheque` top-level keys.
+- The matching object is filled based on the uploaded image, and the unused object is `{}`.
 - If the model returns invalid JSON, the API responds with an error and includes the raw model response for debugging.
 - The API supports one primary Groq key plus five optional fallback keys.
 - Uploaded images are resized and compressed before being sent to Groq to reduce latency.

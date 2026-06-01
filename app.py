@@ -23,13 +23,20 @@ MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
 MAX_IMAGE_DIMENSION = 1600
 JPEG_QUALITY = 82
 
-SYSTEM_PROMPT = """You are an accurate OCR and document extraction system for financial/business images such as cheques, receipts, invoices, bills, slips, transaction screenshots, utility bills, and handwritten documents.
+SYSTEM_PROMPT = """You are an accurate OCR and document extraction system for cheque and online-transfer images.
 
-Return ONLY valid JSON. No markdown, no explanation, no fixed schema.
-Create clear snake_case keys dynamically from visible content only. Never guess or invent fields.
-Always include raw_text. Include document_type when possible.
-Normalize dates to YYYY-MM-DD when confident; otherwise keep original date text. Include all visible dates and amounts, labelled when possible.
-Preserve useful visible identifiers and details: cheque/account/transaction/invoice numbers, bank/merchant names, IFSC, UPI ID, GST, phone, address, totals, taxes, items, and payment method.
+Return ONLY valid JSON. No markdown and no explanation.
+The response must always use exactly this top-level structure:
+{"online_transfer":{},"cheque":{}}
+
+If the image is an online transfer receipt, fill online_transfer and keep cheque as {}.
+If the image is a cheque, fill cheque and keep online_transfer as {}.
+If the image is neither an online transfer receipt nor a cheque, return {"online_transfer":{},"cheque":{}}.
+
+Use snake_case keys inside the matching object only. Never guess or invent fields.
+Normalize dates to DD-MM-YYYY for cheques and DD/MM/YYYY for online transfers when confident; otherwise keep original date text.
+Preserve useful visible identifiers and details such as cheque_no, receipt_no, transaction_no, payee, payer, beneficiary_name, beneficiary_iban, amount, amount_in_words, bank_name, account_no, iban, branch, from_account, and account_type.
+Always include from_ocr:true and extraction_method:"llm" inside the filled object.
 If text is unclear, return the best readable value with confidence. Omit invisible values and avoid nulls unless important and partially visible."""
 
 
@@ -163,8 +170,64 @@ def parse_json_response(response_text: str) -> dict[str, Any] | list[Any]:
     return json.loads(cleaned)
 
 
+def looks_like_online_transfer(data: dict[str, Any]) -> bool:
+    transfer_keys = {
+        "receipt_no",
+        "transaction_no",
+        "transaction_id",
+        "reference_no",
+        "beneficiary_name",
+        "beneficiary_iban",
+        "from_account",
+        "account_type",
+    }
+    document_type = str(data.get("document_type", "")).lower()
+    return "transfer" in document_type or "receipt" in document_type or any(key in data for key in transfer_keys)
+
+
+def looks_like_cheque(data: dict[str, Any]) -> bool:
+    cheque_keys = {
+        "cheque_no",
+        "payee",
+        "payer",
+        "amount_in_words",
+        "branch",
+    }
+    document_type = str(data.get("document_type", "")).lower()
+    return "cheque" in document_type or "check" in document_type or any(key in data for key in cheque_keys)
+
+
+def add_extraction_metadata(data: dict[str, Any]) -> dict[str, Any]:
+    if data:
+        data.setdefault("from_ocr", True)
+        data.setdefault("extraction_method", "llm")
+    return data
+
+
+def normalize_extraction_response(data: dict[str, Any] | list[Any]) -> dict[str, Any]:
+    normalized: dict[str, Any] = {"online_transfer": {}, "cheque": {}}
+
+    if not isinstance(data, dict):
+        return normalized
+
+    online_transfer = data.get("online_transfer")
+    cheque = data.get("cheque")
+
+    if isinstance(online_transfer, dict) or isinstance(cheque, dict):
+        normalized["online_transfer"] = add_extraction_metadata(online_transfer or {}) if isinstance(online_transfer, dict) else {}
+        normalized["cheque"] = add_extraction_metadata(cheque or {}) if isinstance(cheque, dict) else {}
+        return normalized
+
+    if looks_like_online_transfer(data):
+        normalized["online_transfer"] = add_extraction_metadata(data)
+    elif looks_like_cheque(data):
+        normalized["cheque"] = add_extraction_metadata(data)
+
+    return normalized
+
+
 def success_response(data: dict[str, Any] | list[Any]):
-    return jsonify({"success": True, "status": "success", "code": 200, "data": data}), 200
+    return jsonify(data), 200
 
 
 def error_response(message: str, status_code: int, **extra: Any):
@@ -216,7 +279,7 @@ def extract_document():
                 content=[
                     {
                         "type": "text",
-                        "text": "Extract all useful data from this image and return dynamic JSON only.",
+                        "text": "Extract the cheque or online-transfer data from this image and return only the required JSON structure.",
                     },
                     {
                         "type": "image_url",
@@ -240,7 +303,7 @@ def extract_document():
                 raw_model_response=raw_response,
             )
 
-        return success_response(extracted_data)
+        return success_response(normalize_extraction_response(extracted_data))
 
     except Exception as exc:
         return error_response(str(exc), 500)
