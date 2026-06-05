@@ -457,8 +457,11 @@ def is_empty_extraction(data: dict[str, Any]) -> bool:
 
 def success_response(data: dict[str, Any] | list[Any]):
     if isinstance(data, dict) and "online_transfer" in data and "cheque" in data and "pos" in data:
-        return jsonify({"status": not is_empty_extraction(data), "data": data}), 200
-
+        return jsonify({
+            "status": not is_empty_extraction(data),
+            "message": "Document extracted successfully",
+            "data": data
+        }), 200
     return jsonify(data), 200
 
 
